@@ -1,0 +1,323 @@
+---
+title: "R Programming and Bio-conductor Assignment Report"
+author: "Mutesasira Edward"
+date: "Date: 2023-10-30"
+output:
+  pdf_document:
+    toc_depth: '3'
+  html_document:
+    toc_depth: 3
+    theme: readable
+---
+
+```{r setup, include=FALSE}
+# Importing packages
+library(tidyverse)
+library(psych)
+library(ggtern)
+library(report)
+#Setting working directory
+getwd()
+setwd("/home/eddie/R/msb7102bioconductorandrprogrammingassignment")
+# Reading the metaFile.csv
+meta <- read_csv("metaFile.csv")
+# Importing AssignmentFile.csv file
+aFile <- read.csv("AssignmentFile.csv")
+# Reading statsFile.csv file
+stats <- read_csv("statsFile.csv")
+```
+
+### Section A: Data Exploration 1
+metaFile.csv file was read into R session and the following were the explorations. 
+
+The number of records and columns.
+```{r dim1, echo=FALSE, comment=NA}
+# Returning the number of rows and columns
+dim(meta)
+```
+
+The number of samples which were obtained for each level of treatment
+```{r count1, echo=FALSE, comment=NA}
+# Counting the number of samples which were obtained for each level of treatment
+tab<-table(meta$Treatment)
+data.frame(Level=names(tab),Sample=as.vector(tab))
+```
+
+The number of samples which were obtained for each participant
+```{r count2, echo=FALSE, comment=NA}
+# Counting the number of samples which were obtained for each participant
+tab<-table(meta$Participant)
+data.frame(Participant=names(tab),Sample=as.vector(tab))
+```
+
+Records for samples obtained at treatment levels 0,2 and 4
+```{r extract1, echo=FALSE, comment=NA}
+# Extracting records for samples obtained at treatment levels 0,2 and 4
+meta %>% 
+  select(sample_id, Participant, Treatment)  %>%
+  filter(Treatment %in% c(0, 2, 4))
+```
+
+Extract records for samples obtained from participants A and C
+```{r extract2, echo=FALSE, comment=NA}
+# Extracting records for samples obtained from participants A and C
+meta %>% 
+  select(sample_id, Participant, Treatment)  %>%
+  filter(Participant %in% c("A","C"))
+```
+
+The number of samples under each participant groups per treatment level.
+```{r table, echo=FALSE, comment=NA}
+# Counting the number of samples under each participant groups per treatment level.
+table(meta$Participant, meta$Treatment)
+```
+
+### Section B: Data Exploration 2
+AssignmentFile.csv file was imported into R session and the following were the explorations.
+
+The average concentration for each of the concentrations (ie Conc1, Conc2 and Conc3)
+```{r mean1, echo=FALSE, comment=NA}
+# Computing the average concentration for each of the concentrations (ie Conc1, Conc2 and Conc3)
+mn <- lapply(select(aFile, Conc1,Conc2,Conc3), mean) 
+df <- data.frame(mn)
+row.names(df)[1] <- "Mean"  
+df
+```
+
+The average Concentration for each sample
+```{r mean2, echo=FALSE, comment=NA}
+# Computing the average Concentration for each sample 
+ rowMeans(aFile[,2:4], na.rm = T)
+```
+
+Extended data-frame with a new variable ”Concmean” to contain the average Concentration values computed above
+```{r mean3, echo=FALSE, comment=NA}
+# Extending data-frame with a new variable ”Concmean” to contain the average Concentration (mean) values computed above
+aFile$Concmean <-  rowMeans(aFile[,2:4], na.rm = T)
+aFile
+```
+
+The basic statics (min, max, mean, median, quartiles, variance, standard deviation) for all the variables including Concmean
+```{r statics, echo=FALSE, comment=NA}
+# Obtaining the basic statics (min, max, mean, median, quartiles, variance, standard deviation)
+bstat1<-summary(aFile[,2:5])
+bstat1
+sd1<-as.data.frame(sapply(aFile[,2:5], sd))
+scol<- colnames(sd1)[1] <- "Standard_Deviation" 
+sd1
+
+var1<-as.data.frame(sapply(aFile[,2:5], var))
+vcol<-colnames(var1)[1] <- "Variance" 
+var1
+
+```
+
+### Section C : Data Manipulation and Graphics
+The new data-frame after removing variables Conc1, Conc2 and Conc3 
+```{r new, echo=FALSE, comment=NA}
+# Removing variables Conc1, Conc2, Conc3
+new_aFile <- data.frame(aFile[, -c(2:4)])
+new_aFile
+```
+
+Merged information in concentration data-frame with metadata data-frame 
+```{r merged, echo=FALSE, comment=NA}
+# Merging the concentration with metadata data-frames
+names(new_aFile) <- c("sample_id", "Concmean")
+#merged <- merge(meta, new_aFile, by = "sample_id", all = TRUE) 
+merged<-cbind(meta, new_aFile[,2])
+colnames(merged)[colnames(merged) == "new_aFile[, 2]"] <- "Concmean"
+merged
+```
+
+Size of the combined data-frame (rows and columns)
+```{r size, echo=FALSE, comment=NA}
+# Checking the size of combined data-frame
+dim(merged)
+```
+
+Variable “participantsBC” with the extracted records for samples for participants B and C obtained at treatment levels 2,3 and 4.
+```{r participantBC, echo=FALSE, comment=NA}
+# extracting records for samples for participants B and C obtained at treatment levels 2,3 and 4.
+participantsBC <- merged %>%
+  filter(Participant %in% c("B", "C") & Treatment %in% c(2, 3, 4)) %>%
+  select(sample_id, Participant, Treatment, Concmean)
+participantsBC
+```
+
+Computed average Concentration for participants B and C under treatments 2, 3 and 4. 
+```{r average, echo=FALSE, comment=NA, message=FALSE}
+# Computing the average Concentration for participants B and C under treatments 2, 3 and 4.
+average_con  <- participantsBC %>%
+  group_by(Participant, Treatment) %>%
+  summarize(Average = mean(Concmean, na.rm = TRUE)) %>% 
+  rename(Average_Concetration = Average)
+print.data.frame(average_con)
+```
+
+Changed treatment levels from 0,1,2,3,4 to “very-low”, “low”, “moderate”, “high”, “very-high” respectively on the combined dataset using for loop.
+```{r newLevels, echo=FALSE, comment=NA}
+new_level <- c("very-low", "low", "moderate", "high", "very-high")
+# Loop through Treatment column to change the levels
+for (i in 1:length(new_level)) {
+  merged$Treatment[merged$Treatment == i - 1] <- new_level[i]
+}
+print.data.frame(merged, row.names = FALSE)
+```
+
+Changed treatment levels from 0,1,2,3,4 to ”very-low”, ”low”, ”moderate”, ”high”, ”very-high” respectively using the created function
+```{r function1, echo=FALSE, comment=NA}
+# Function to map numeric treatment levels to categories
+convert_treatment <- function(level) {
+  level_labels <- c("very-low", "low", "moderate", "high", "very-high")
+  names(level_labels) <- 0:4  # Assign names corresponding to numeric levels
+  return(ifelse(level %in% names(level_labels), level_labels[as.character(level)], 
+                as.character(level)))
+}
+merged$Treatment <- sapply(merged$Treatment, convert_treatment)
+# Print the updated dataset
+print.data.frame(merged, row.names = FALSE)
+```
+
+Time taken for for-loop to execute 
+```{r time1, echo=FALSE, comment=NA}
+start_time_for <- system.time({
+treatment_level <- c("very-low", "low", "moderate", "high", "very-high")
+# Loop through Treatment column to change the levels
+for (i in 1:length(treatment_level)) {
+  merged$Treatment[merged$Treatment == i - 1] <- treatment_level[i]
+}
+})
+end_time_for <- system.time({})  # Measure execution time
+execution_time_for <- end_time_for - start_time_for  # Calculate execution time
+execution_time_for
+```
+
+Time taken for sapply() function to execute 
+```{r time2, echo=FALSE, comment=NA}
+start_time_sapply <- system.time({
+convert_treatment <- function(level) {
+  level_labels <- c("very-low", "low", "moderate", "high", "very-high")
+  names(level_labels) <- 0:4  # Assign names corresponding to numeric levels
+  return(ifelse(level %in% names(level_labels), level_labels[as.character(level)], 
+                as.character(level)))
+}
+merged$Treatment <- sapply(merged$Treatment, convert_treatment)
+})
+end_time_sapply <- system.time({})  # Measure execution time
+
+execution_time_sapply <- end_time_sapply - start_time_sapply  # Calculate execution time
+execution_time_sapply
+```
+`COMMENT:` system.time() measures CPU time used by a specific expression or function and the outputs are with variables user, system and elapsed. User Time is the wall clock time. The time that a user experienced. Elapsed Time is the time charged to the CPU(s) for the expression. If elapsed time > user time, this means that the CPU is waiting around for some other operations (may be external) to be done. If elapsed time < user time, this means that the machine has multiple cores and is able to use them. Comparing the above time, sapply() function is faster than for-loop function.
+
+
+Graphical representations of the combined dataset with the changed treatment levels. 
+```{r graph1, echo=FALSE, comment=NA, message=TRUE}
+ggplot(data = merged) +
+geom_bar(mapping = aes(x = Treatment, fill = Participant))+labs(title = "The Graph treatment levels Filled by Participant. ", x = "Treatment level")  + theme(
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),  # Title appearance
+    panel.grid.major = element_line(color = "gray"),  # Adjusting gridlines
+    axis.text = element_text(color = "black"),  # Adjusting axis text color
+    panel.border = element_rect(color = "black", fill = NA, size = 1)
+  )
+
+ggplot(data = merged) +
+geom_bar(mapping = aes(x =Participant, fill = Treatment),position = "dodge")+labs(title ="The Graph Participant Filled by Treatment level ", x = "Participant") + theme(
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),  # Title appearance
+    panel.grid.major = element_line(color = "gray"),  # Adjusting gridlines
+    axis.text = element_text(color = "black"),  # Adjusting axis text color
+    panel.border = element_rect(color = "black", fill = NA, size = 1)
+  )
+
+ggplot(data = merged) +
+geom_point(mapping = aes(x = Participant, y = Concmean, shape = Treatment))+labs(title ="The ggplot of Concmean against Participant", x = "Participant", t="Concmean")  + theme(
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),  # Title appearance
+    panel.grid.major = element_line(color = "gray"),  # Adjusting gridlines
+    axis.text = element_text(color = "black"),  # Adjusting axis text color
+    panel.border = element_rect(color = "black", fill = NA, size = 1)
+  )
+
+ggplot(data = merged, mapping = aes(x = Treatment, y = Concmean)) +
+geom_boxplot()+labs(title ="The ggplot of Concmean against Treatement", x = "Treatment", t="Concmean")  + theme(
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),  # Title appearance
+    panel.grid.major = element_line(color = "gray"),  # Adjusting gridlines
+    axis.text = element_text(color = "black"),  # Adjusting axis text color
+    panel.border = element_rect(color = "black", fill = NA, size = 1)
+  )
+```
+
+### Section D : Classical hypothesis testing and statistical models in R
+The statsFile.csv file that contains information about participants
+involved in a study was read into a data-frame to explore the key predictors of a disease status
+
+The relation of BMI to BP for the all study participants
+```{r relation1, echo=FALSE, comment=NA}
+#Performing correlation on BMI and BP
+cor.test(stats$BMI, stats$BP)
+cor.test(stats$BMI, stats$BP, method = "pearson")
+# Performing the covariance
+cov(stats$BMI, stats$BP)
+cov(stats$BMI, stats$BP) / (sd(stats$BMI) * sd(stats$BP))
+##comparison of means
+mean(stats$BMI)
+mean(stats$BP)
+
+t.test(stats$BMI, stats$BP)
+##comparison of variances
+var(stats$BMI)
+var(stats$BP)
+var.test(stats$BMI, stats$BP)
+```
+
+How disease status (phenotype) is related to gender
+```{r relation2, echo=FALSE, comment=NA}
+# Performing chi-squared contingency table tests and goodness-of-fit tests.
+chisq.test(table(stats$Status, stats$Gender))
+table(stats$Status, stats$Gender)#table of status by gender
+```
+
+The constructed model to show the relationship between BMI and BP
+```{r model, echo=FALSE, comment=NA}
+# Constructing model showing the relationship between BMI and BP
+model1 <- lm(BP ~ BMI, data = stats)
+model1
+summary(model1)
+
+plot(stats$BMI, stats$BP)
+abline(model1, col = "yellow")
+# Making a report of model
+report(model1)
+```
+
+The comparison of BMI in the different sampling locations
+```{r comparison, echo=FALSE, comment=NA}
+# Calculating mean and median
+mstat<-stats %>% 
+  group_by(Location) %>% 
+  summarize(mean = mean(BMI), median = median(BMI))
+# Calculating the Variance
+vstat<-stats %>% 
+  group_by(Location) %>% 
+  summarize(variance = var(BMI))
+# Merging mstat and vstat dataframes
+result<- inner_join(mstat, vstat, by="Location")
+result
+# Performing a histogram
+hist(stats$BMI)
+# Making a ggplot of MBI against Location
+ggplot(stats, mapping = aes(x = Location, y = BMI)) +labs(title = "ggplot of BMI against Location", x = "Location", y = "BMI") +  # Setting titles
+  geom_boxplot() + theme_bw()
+# Making summary report of BMI by Location
+anov_result <- aov(BMI~Location, stats)
+summary(anov_result)
+report(anov_result)
+```
+
+How disease status depends on both BMI and BP
+```{r dependance, echo=FALSE, comment=NA}
+# Fitting Generalized Linear Models
+dependance <- glm(Status ~ BMI + BP, data = stats, family = "binomial")
+summary(dependance)
+report(dependance)
+```
